@@ -951,3 +951,229 @@ section {
     }
   }
 }
+
+section {
+  name: "type_parameters_in_type_type"
+  description: "Tests for type parameter deduction within TypeType (type(T))."
+  test {
+    name: "type_param_in_type_type_int"
+    check_only: true
+    expr: "cast('hello', int)"
+    type_env {
+      name: "cast"
+      function {
+        overloads {
+          overload_id: "cast_val_to_type"
+          params { dyn {} }
+          params {
+            type {
+              type_param: "T"
+            }
+          }
+          result_type {
+            type_param: "T"
+          }
+        }
+      }
+    }
+    typed_result {
+      deduced_type {
+        primitive: INT64
+      }
+    }
+  }
+  test {
+    name: "type_param_in_type_type_string"
+    check_only: true
+    expr: "cast(123, string)"
+    type_env {
+      name: "cast"
+      function {
+        overloads {
+          overload_id: "cast_val_to_type"
+          params { dyn {} }
+          params {
+            type {
+              type_param: "T"
+            }
+          }
+          result_type {
+            type_param: "T"
+          }
+        }
+      }
+    }
+    typed_result {
+      deduced_type {
+        primitive: STRING
+      }
+    }
+  }
+  test {
+    name: "composite_type_param_in_type_type"
+    check_only: true
+    expr: "first_elem_type('data', type([1]))"
+    type_env {
+      name: "first_elem_type"
+      function {
+        overloads {
+          overload_id: "first_elem_type_list"
+          params { dyn {} }
+          params {
+            type {
+              list_type {
+                elem_type {
+                  type_param: "T"
+                }
+              }
+            }
+          }
+          result_type {
+            type_param: "T"
+          }
+        }
+      }
+    }
+    typed_result {
+      deduced_type {
+        primitive: INT64
+      }
+    }
+  }
+  test {
+    name: "nested_type_param_in_type_type"
+    check_only: true
+    expr: "unwrap_type(type(int))"
+    type_env {
+      name: "unwrap_type"
+      function {
+        overloads {
+          overload_id: "unwrap_type_t"
+          params {
+            type {
+              type {
+                type_param: "T"
+              }
+            }
+          }
+          result_type {
+            type {
+              type_param: "T"
+            }
+          }
+        }
+      }
+    }
+    typed_result {
+      deduced_type {
+        type {
+          primitive: INT64
+        }
+      }
+    }
+  }
+  test {
+    name: "type_map_erasure_comparison"
+    check_only: true
+    expr: "type({}) == map"
+    typed_result {
+      deduced_type {
+        primitive: BOOL
+      }
+    }
+  }
+  test {
+    name: "type_list_erasure_comparison"
+    check_only: true
+    expr: "type([1]) == list"
+    typed_result {
+      deduced_type {
+        primitive: BOOL
+      }
+    }
+  }
+  test {
+    name: "type_comparison_different_types_inequality"
+    expr: "type(1) != type(1u)"
+    typed_result {
+      result {
+        bool_value: true
+      }
+      deduced_type {
+        primitive: BOOL
+      }
+    }
+  }
+  test {
+    name: "type_comparison_different_types_equality"
+    expr: "type(1) == type(1u)"
+    typed_result {
+      result {
+        bool_value: false
+      }
+      deduced_type {
+        primitive: BOOL
+      }
+    }
+  }
+}
+
+section {
+  name: "empty_range_nested_comprehensions"
+  description: "An empty iteration range gives the iteration variable a free type "
+               "variable rather than dyn. Using it as the range of a nested "
+               "comprehension must resolve it to dyn."
+  test {
+    name: "empty_list_range_nested_list_comprehension"
+    check_only: true
+    expr: "[].map(x, x.map(y, y))"
+    typed_result {
+      deduced_type {
+        list_type { elem_type { list_type { elem_type { dyn {} } } } }
+      }
+    }
+  }
+  test {
+    name: "empty_map_range_nested_comprehension"
+    check_only: true
+    expr: "{}.map(k, k.map(y, y))"
+    typed_result {
+      deduced_type {
+        list_type { elem_type { list_type { elem_type { dyn {} } } } }
+      }
+    }
+  }
+  test {
+    name: "empty_range_nested_comprehension_before_constraint"
+    description: "Inner comprehension widens the outer element type to dyn, so the "
+                 "subsequent int comparison is legal."
+    expr: "[].all(x, x.all(y, y == 1) && x == 1)"
+    typed_result {
+      result { bool_value: true }
+      deduced_type { primitive: BOOL }
+    }
+  }
+  test {
+    name: "empty_range_nested_comprehension_boolean_map"
+    description: "Inner comprehension body produces bool, so the expression deduces to "
+                 "list(list(bool)) even though the range variable is widened to dyn."
+    check_only: true
+    expr: "[].map(i, i.map(j, j > 1))"
+    typed_result {
+      deduced_type {
+        list_type { elem_type { list_type { elem_type { primitive: BOOL } } } }
+      }
+    }
+  }
+  test {
+    name: "empty_range_nested_comprehension_equality"
+    description: "Inner comprehension widens the outer element type to dyn and deduces "
+                 "list(list(bool)), which is comparable with [[]] (list(list(dyn)))."
+    expr: "[].map(i, i.map(j, j > 1)) == [[]]"
+    typed_result {
+      result { bool_value: false }
+      deduced_type { primitive: BOOL }
+    }
+  }
+}
+
